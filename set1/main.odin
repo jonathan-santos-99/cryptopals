@@ -10,11 +10,29 @@ import "core:math/bits"
 import "core:math"
 import "core:slice"
 import "core:sort"
+import "core:crypto/aes"
 
 FILE_4 :: "4.txt"
 FILE_6 :: "ch_6_text"
+FILE_7 :: "7.txt"
 
 main :: proc() {
+    cypher := "YELLOW SUBMARINE"
+    raw_data := os.read_entire_file_from_filename(FILE_7) or_else fmt.panicf("could not read file %s\n", FILE_7)
+    data := base64.decode(transmute(string)raw_data) or_else panic("could not decode base64")
+
+    ctx : aes.Context_ECB
+    aes.init_ecb(&ctx, transmute([]byte) cypher)
+    dst := make([]u8, 16)
+
+    for i := 0; i + 16 <= len(data); i += 16 {
+        src := data[i: i + 16]
+        aes.decrypt_ecb(&ctx, dst, src)
+        fmt.printf("%s", transmute(string)dst)
+    }
+}
+
+challenge_6 :: proc() {
     raw_data := os.read_entire_file_from_filename(FILE_6) or_else fmt.panicf("could not read file %s\n", FILE_6)
     data := base64.decode(transmute(string)raw_data) or_else panic("could not decode base64")
     candidates := get_possible_cypher_xor_arr_repeating(data)
