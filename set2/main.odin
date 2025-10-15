@@ -1,14 +1,25 @@
 package main
 
-import "core:strconv"
+import "core:mem"
+import "base:intrinsics"
 import "core:fmt"
+import "core:crypto/aes"
+import "core:encoding/base64"
+import "core:os"
+import "core:strings"
 
 main :: proc () {
-    block := "YELLOW SUBMARINE"
-    padded_block := pad_block(transmute([]byte) block, 20)
+    FILE :: "10.txt"
+    key : [16]byte = "YELLOW SUBMARINE"
+    iv : [16]byte
 
-    fmt.printfln("%d '%x'", len(block), block)
-    fmt.printfln("%d '%x'", len(padded_block), transmute(string) padded_block)
+    // decrypt
+    raw_data := os.read_entire_file_from_filename(FILE) or_else fmt.panicf("could not read file %s\n", FILE)
+    data := base64.decode(transmute(string)raw_data) or_else panic("could not decode base64")
+
+    decrypted_text := decrypt_cbc(data, key[:], iv[:])
+
+    fmt.println(string(decrypted_text))
 }
 
 // challenge 9
@@ -31,4 +42,64 @@ pad_block :: proc(block: []byte, expected_block_size: int) -> []byte {
     }
 
     return new_block
+}
+
+decrypt_cbc :: proc (data: []byte, key: []byte, iv: []byte) -> []byte {
+    ensure(len(key) == aes.BLOCK_SIZE)
+    ensure(len(iv) == aes.BLOCK_SIZE)
+    ensure(len(data) % aes.BLOCK_SIZE == 0)
+
+    ctx : aes.Context_ECB
+    aes.init_ecb(&ctx, key)
+
+    last_cypher_text := iv
+    decrypted_text := make([]byte, len(data))
+    for i := 0; i + aes.BLOCK_SIZE <= len(data); i += aes.BLOCK_SIZE {
+        src := data[i: i + aes.BLOCK_SIZE]
+        dst := decrypted_text[i: i + aes.BLOCK_SIZE]
+        aes.decrypt_ecb(&ctx, dst, src)
+        fixed_xor_inplace(dst, last_cypher_text)
+        last_cypher_text = src
+    }
+
+    return decrypted_text
+}
+
+encrypt_ecb :: proc (data: []byte, key: []byte) -> []byte {
+    ensure(len(key) == aes.BLOCK_SIZE)
+    ensure(len(data) % aes.BLOCK_SIZE == 0)
+    ctx : aes.Context_ECB
+    aes.init_ecb(&ctx, key)
+
+    encrypted_text := make([]byte, len(data))
+    for i := 0; i + aes.BLOCK_SIZE <= len(data); i += aes.BLOCK_SIZE {
+        src := data[i: i + aes.BLOCK_SIZE]
+        dst := encrypted_text[i: i + aes.BLOCK_SIZE]
+        aes.encrypt_ecb(&ctx, dst, src)
+    }
+
+    return encrypted_text
+}
+
+decrypt_ecb :: proc (data: []byte, key: []byte) -> []byte{
+    ensure(len(key) == aes.BLOCK_SIZE)
+    ensure(len(data) % aes.BLOCK_SIZE == 0)
+    ctx : aes.Context_ECB
+    aes.init_ecb(&ctx, key)
+
+    decrypted_text := make([]byte, len(data))
+    for i := 0; i + aes.BLOCK_SIZE <= len(data); i += aes.BLOCK_SIZE {
+        src := data[i: i + aes.BLOCK_SIZE]
+        dst := decrypted_text[i: i + aes.BLOCK_SIZE]
+        aes.decrypt_ecb(&ctx, dst, src)
+    }
+
+    return decrypted_text
+}
+
+fixed_xor_inplace :: proc(a: []byte, b: []byte) {
+    ensure(len(a) == len(b))
+    for i := 0; i < len(a); i += 1 {
+        a[i] ~= b[i]
+    }
 }
