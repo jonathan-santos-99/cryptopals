@@ -7,8 +7,28 @@ import "core:crypto/aes"
 import "core:encoding/base64"
 import "core:os"
 import "core:strings"
+import "core:math/rand"
 
-main :: proc () {
+Encrypt_Type :: enum { ECB, CBC }
+
+main :: proc() {
+
+}
+
+random_aes_encrypt :: proc (data: []byte) -> ([]byte, Encrypt_Type) {
+    key := random_aes_key()
+    t := rand.choice_enum(Encrypt_Type)
+
+    switch t {
+        case .ECB: return encrypt_ecb(data, key), t
+        case .CBC: return encrypt_cbc(data, key, random_aes_key()), t
+    }
+
+    assert(false, "unreacheable")
+    return nil, t
+}
+
+challenge_10 :: proc () {
     FILE :: "10.txt"
     key : [16]byte = "YELLOW SUBMARINE"
     iv : [16]byte
@@ -136,4 +156,10 @@ fixed_xor_inplace :: proc(a: []byte, b: []byte) {
     for i := 0; i < len(a); i += 1 {
         a[i] ~= b[i]
     }
+}
+
+random_aes_key :: proc(key_size : int = aes.BLOCK_SIZE) -> []byte {
+    key := make([]byte, key_size)
+    for i := 0; i < key_size; i += 1 do key[i] = byte(rand.uint32() % 256)
+    return key
 }
