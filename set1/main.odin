@@ -10,13 +10,88 @@ import "core:math/bits"
 import "core:math"
 import "core:slice"
 import "core:sort"
+import "core:time"
 import "core:crypto/aes"
 
 FILE_4 :: "4.txt"
 FILE_6 :: "ch_6_text"
 FILE_7 :: "7.txt"
+FILE_8 :: "8.txt"
 
 main :: proc() {
+    challenge_8()
+    challenge_8_1()
+}
+
+challenge_8 :: proc() {
+    stop_watch : time.Stopwatch
+
+    time.stopwatch_start(&stop_watch)
+
+    raw_data := os.read_entire_file_from_filename(FILE_8) or_else fmt.panicf("could not read file %s\n", FILE_8)
+    lines := strings.split_lines(transmute(string)raw_data)
+
+    found := false
+    for i := 0; i < len(lines) && !found; i += 1 {
+        line := lines[i]
+        found = is_aes_ecb_encrypted_1(transmute([]byte)line)
+        if found {
+            fmt.println(i + 1)
+        }
+    }
+
+    time.stopwatch_stop(&stop_watch)
+
+    duration := time.stopwatch_duration(stop_watch)
+    t := time.duration_milliseconds(duration)
+
+    fmt.printfln("Total time for map of identical blocks: %.4fms", t)
+}
+
+challenge_8_1 :: proc() {
+    stop_watch : time.Stopwatch
+
+    time.stopwatch_start(&stop_watch)
+
+    raw_data := os.read_entire_file_from_filename(FILE_8) or_else fmt.panicf("could not read file %s\n", FILE_8)
+    lines := strings.split_lines(transmute(string)raw_data)
+
+    distances := make([]int, len(lines))
+    for k := 0; k < len(lines); k += 1 {
+        line := lines[k]
+        data := hex.decode(transmute([]byte)line) or_else fmt.panicf("could not decode hex line %s", line)
+        size := len(data)
+        for i := 0; i < size; i += 16 {
+            block := data[i: i + 16]
+            for j := i + 16; i < size && j < size; j += 16 {
+                other_block := data[j : j + 16]
+                hamming_distance(block, other_block)
+                distances[k] += int(hamming_distance(block, other_block))
+            }
+        }
+    }
+
+    min_i := 0
+    min := distances[min_i]
+    for i := 1; i < len(distances); i += 1 {
+        d := distances[i]
+        if d < min {
+            min_i = i
+            min = d
+        }
+    }
+
+    fmt.println(min_i + 1)
+
+    time.stopwatch_stop(&stop_watch)
+
+    duration := time.stopwatch_duration(stop_watch)
+    t := time.duration_milliseconds(duration)
+
+    fmt.printfln("Total time for brute forcing hamming blocks: %.4fms", t)
+}
+
+challenge_7 :: proc() {
     cypher := "YELLOW SUBMARINE"
     raw_data := os.read_entire_file_from_filename(FILE_7) or_else fmt.panicf("could not read file %s\n", FILE_7)
     data := base64.decode(transmute(string)raw_data) or_else panic("could not decode base64")
@@ -45,6 +120,26 @@ challenge_6 :: proc() {
             panic("could not write file")
         }
     }
+}
+
+is_aes_ecb_encrypted_1 :: proc(data: []byte) -> bool {
+    BLOCK_SIZE :: 16
+
+    data_size := len(data)
+    ensure(data_size % BLOCK_SIZE == 0)
+    identical_blocks_map := make(map[string]int, data_size / BLOCK_SIZE)
+
+    for i := 0; i + BLOCK_SIZE <= data_size; i += BLOCK_SIZE {
+        block := data[i : i + BLOCK_SIZE]
+        cnt := identical_blocks_map[transmute(string)block]
+        if cnt >= 1 {
+            return true
+        } else {
+            identical_blocks_map[transmute(string)block] += 1
+        }
+    }
+
+    return false
 }
 
 get_possible_cypher_xor_arr_repeating :: proc(data: []byte, n_key_sizes_to_test: int = 40, candidates_to_return: int = 3) -> []string {
